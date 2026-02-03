@@ -1,0 +1,40 @@
+name: Kimi Code Sync
+
+on:
+  issues:
+    types: [opened, edited]
+
+jobs:
+  process:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Check for Kimi command
+        id: check
+        run: |
+          TITLE="${{ github.event.issue.title }}"
+          BODY="${{ github.event.issue.body }}"
+          
+          if [[ "$TITLE" == *"[KIMI]"* ]]; then
+            echo "trigger=true" >> $GITHUB_OUTPUT
+            echo "filename=$(echo "$TITLE" | sed 's/\[KIMI\]//g' | xargs)" >> $GITHUB_OUTPUT
+            echo "content<<EOF" >> $GITHUB_OUTPUT
+            echo "$BODY" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Create file from issue
+        if: steps.check.outputs.trigger == 'true'
+        run: |
+          mkdir -p $(dirname "${{ steps.check.outputs.filename }}")
+          echo "${{ steps.check.outputs.content }}" > "${{ steps.check.outputs.filename }}"
+          
+      - name: Commit and push
+        if: steps.check.outputs.trigger == 'true'
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add .
+          git commit -m "Add ${{ steps.check.outputs.filename }} from Kimi"
+          git push
