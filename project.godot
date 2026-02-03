@@ -1,0 +1,26 @@
+[application]
+config/name="Noxtyr"
+config/description="2.5D Dark Fantasy Action RPG"
+run/main_scene="res://scenes/game.tscn"
+config/features=PackedStringArray("4.2", "Mobile")
+boot_splash/bg_color=Color(0.0196078, 0.0196078, 0.0313726, 1)
+
+[display]
+window/size/viewport_width=1080
+window/size/viewport_height=2640
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+window/handheld/orientation=5
+window/vsync/vsync_mode=0
+
+[rendering]
+renderer/rendering_method="mobile"
+textures/vram_compression/import_etc2_astc=true
+frame_limits/frame_limit=120
+
+[autoload]
+GameState="*res://autoload/game_state.gd"
+
+[input_devices]
+pointing/emulate_touch_from_mouse=true
+
