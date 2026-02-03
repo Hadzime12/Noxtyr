@@ -4,37 +4,65 @@ on:
   issues:
     types: [opened, edited]
 
+permissions:
+  contents: write
+  issues: write
+
 jobs:
   process:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       
-      - name: Check for Kimi command
-        id: check
+      - name: Parse Kimi command
+        id: parse
         run: |
-          TITLE="${{ github.event.issue.title }}"
-          BODY="${{ github.event.issue.body }}"
+          TITLE='${{ github.event.issue.title }}'
           
-          if [[ "$TITLE" == *"[KIMI]"* ]]; then
+          # Extract filename from [KIMI] path/to/file.ext
+          if [[ "$TITLE" =~ \[KIMI\][[:space:]]*(.+)$ ]]; then
+            FILENAME="${BASH_REMATCH[1]}"
+            echo "filename=$FILENAME" >> $GITHUB_OUTPUT
             echo "trigger=true" >> $GITHUB_OUTPUT
-            echo "filename=$(echo "$TITLE" | sed 's/\[KIMI\]//g' | xargs)" >> $GITHUB_OUTPUT
-            echo "content<<EOF" >> $GITHUB_OUTPUT
-            echo "$BODY" >> $GITHUB_OUTPUT
-            echo "EOF" >> $GITHUB_OUTPUT
+          else
+            echo "trigger=false" >> $GITHUB_OUTPUT
           fi
       
-      - name: Create file from issue
-        if: steps.check.outputs.trigger == 'true'
+      - name: Create file from issue body
+        if: steps.parse.outputs.trigger == 'true'
         run: |
-          mkdir -p $(dirname "${{ steps.check.outputs.filename }}")
-          echo "${{ steps.check.outputs.content }}" > "${{ steps.check.outputs.filename }}"
+          FILENAME="${{ steps.parse.outputs.filename }}"
+          mkdir -p "$(dirname "$FILENAME")"
           
+          # Write issue body to file
+          cat << 'BODY_EOF' > "$FILENAME"
+          ${{ github.event.issue.body }}
+          BODY_EOF
+      
       - name: Commit and push
-        if: steps.check.outputs.trigger == 'true'
+        if: steps.parse.outputs.trigger == 'true'
         run: |
-          git config user.name "github-actions"
-          git config user.email "actions@github.com"
+          git config user.name "Kimi Bot"
+          git config user.email "kimi@noxtyr.game"
           git add .
-          git commit -m "Add ${{ steps.check.outputs.filename }} from Kimi"
+          git commit -m "🤖 Auto-sync: ${{ steps.parse.outputs.filename }} from Kimi issue #${{ github.event.issue.number }}"
           git push
+      
+      - name: Close issue with comment
+        if: steps.parse.outputs.trigger == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: '✅ Файл `' + '${{ steps.parse.outputs.filename }}' + '` успішно створено!'
+            });
+            await github.rest.issues.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              state: 'closed',
+              labels: ['auto-synced']
+            });
